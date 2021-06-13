@@ -23,7 +23,8 @@ RKSC8Focuser::RKSC8Focuser()
     setSupportedConnections(CONNECTION_SERIAL);
 
     // And here we tell the base class about our focuser's capabilities.
-    SetCapability(FOCUSER_CAN_REL_MOVE | FOCUSER_CAN_ABORT | FOCUSER_CAN_ABS_MOVE);
+    SetCapability(FOCUSER_CAN_REL_MOVE | FOCUSER_CAN_ABORT |
+                  FOCUSER_CAN_ABS_MOVE | FOCUSER_HAS_BACKLASH);
 }
 
 const char *RKSC8Focuser::getDefaultName()
@@ -36,7 +37,6 @@ bool RKSC8Focuser::initProperties()
     // initialize the parent's properties first
     INDI::Focuser::initProperties();
 
-    // TODO: Add any custom properties you need here.
     FocusAbsPosN[0].min = 0.0;
     FocusAbsPosN[0].max = 2048000.0;
     FocusAbsPosN[0].value = 1024000.0;
@@ -46,6 +46,11 @@ bool RKSC8Focuser::initProperties()
     FocusMaxPosN[0].max = 2048000.0;
     FocusMaxPosN[0].value = 2048000.0;
     FocusMaxPosN[0].step = 500.0;
+
+    FocusBacklashN[0].min = 0;
+    FocusBacklashN[0].max = 5000;
+    FocusBacklashN[0].step = 1;
+    FocusBacklashN[0].value = 650;
 
     // Enable/Disable
     IUFillSwitch(&EnableS[0], "ENABLE", "Enable", ISS_OFF);
@@ -289,6 +294,8 @@ bool RKSC8Focuser::Handshake()
     _comms->getMicrostep();
     _comms->getSpeed();
     _comms->getMotorEnabled();
+    _comms->getBacklashEnabled();
+    _comms->getBacklashSteps();
 
     _comms->enableMotor(true);
 
@@ -340,10 +347,39 @@ IPState RKSC8Focuser::MoveRelFocuser(FocusDirection dir, uint32_t ticks)
     return IPS_OK;
 }
 
+bool RKSC8Focuser::SetFocuserBacklash(int32_t steps)
+{
+    LOGF_INFO("SetFocuserBacklash: %d steps", steps);
+
+    if (_comms != 0)
+    {
+        _comms->setBacklashSteps(steps);
+
+        FocusBacklashNP.s = IPS_BUSY;
+        IDSetNumber(&FocusBacklashNP, nullptr);
+    }
+
+    return true;
+}
+
+bool RKSC8Focuser::SetFocuserBacklashEnabled(bool enabled)
+{
+    LOGF_INFO("SetFocuserBacklashEnabled: %s", enabled ? "true" : "false");
+
+    if (_comms != 0)
+    {
+        _comms->enableBacklash(enabled);
+
+        FocusBacklashSP.s = IPS_BUSY;
+        IDSetSwitch(&FocusBacklashSP, nullptr);
+    }
+
+    return true;
+}
+
 bool RKSC8Focuser::AbortFocuser()
 {
     // NOTE: This is needed if we do specify FOCUSER_CAN_ABORT
-    // TODO: Actual code to stop the focuser.
     LOG_INFO("AbortFocuser");
     if (_comms != 0)
     {
@@ -483,6 +519,31 @@ void RKSC8Focuser::speed(ELS::FocusSpeed speed)
     IDSetSwitch(&SpeedSP, nullptr);
 
     LOGF_INFO("Speed is now %s", s);
+}
+
+void RKSC8Focuser::backlashEnabled(bool isEnabled)
+{
+    IUResetSwitch(&FocusBacklashSP);
+
+    FocusBacklashSP.s = IPS_OK;
+
+    if (isEnabled)
+    {
+        FocusBacklashS[0].s = ISS_ON;
+    }
+    else
+    {
+        FocusBacklashS[1].s = ISS_ON;
+    }
+
+    IDSetSwitch(&FocusBacklashSP, nullptr);
+}
+
+void RKSC8Focuser::backlashSteps(uint32_t steps)
+{
+    FocusBacklashNP.s = IPS_OK;
+    FocusBacklashN[0].value = steps;
+    IDSetNumber(&FocusBacklashNP, nullptr);
 }
 
 void RKSC8Focuser::log(const char *fmt, ...)

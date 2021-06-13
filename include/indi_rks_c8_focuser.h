@@ -47,6 +47,8 @@ public:
     virtual void microsteps(ELS::Microsteps ms) override;
     virtual void maxPos(uint32_t position) override;
     virtual void speed(ELS::FocusSpeed speed) override;
+    virtual void backlashEnabled(bool isEnabled) override;
+    virtual void backlashSteps(uint32_t steps) override;
 
 protected:
     virtual bool saveConfigItems(FILE *fp) override;
@@ -62,6 +64,10 @@ protected:
     virtual IPState MoveAbsFocuser(uint32_t targetTicks);
     virtual IPState MoveRelFocuser(INDI::FocuserInterface::FocusDirection dir,
                                    uint32_t ticks);
+
+    virtual bool SetFocuserBacklash(int32_t steps);
+    virtual bool SetFocuserBacklashEnabled(bool enabled);
+
     virtual bool AbortFocuser();
 
 private:
